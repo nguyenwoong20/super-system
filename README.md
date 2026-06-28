@@ -6,9 +6,9 @@ This repository contains the infrastructure and deployment scripts for **Super S
 
 The system is designed with high availability and scalability in mind using AWS managed services.
 
-👉 **[Bấm vào đây để xem Sơ đồ Kiến trúc Gốc (Draw.io Web)](https://app.diagrams.net/#Hnguyenwoong20/super-system/main/docs/architecture.drawio)**
+![Architecture Diagram](docs/architecture.svg)
 
-*(Lưu ý: Nếu GitHub của bạn đang để chế độ Private, vui lòng click "Authorize with GitHub" trên web Draw.io để xem ảnh. Hình ảnh này được thiết kế tự động bằng bộ `drawio-ai-kit` với đầy đủ các icon của AWS, Postgres, Kafka...)*
+*(Hình ảnh này được thiết kế tự động bằng bộ `drawio-ai-kit` với đầy đủ các icon của AWS, Postgres, Kafka... File gốc có thể xem tại `docs/architecture.drawio`)*
 
 ### Components
 1. **Application Load Balancer (ALB)**: Routes public HTTP/HTTPS traffic to the Nginx Gateway.
