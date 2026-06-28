@@ -6,9 +6,44 @@ This repository contains the infrastructure and deployment scripts for **Super S
 
 The system is designed with high availability and scalability in mind using AWS managed services.
 
-👉 **[Bấm vào đây để xem Sơ đồ Kiến trúc Trực tuyến (Draw.io)](https://app.diagrams.net/#Hnguyenwoong20/super-system/main/architecture.drawio)**
+```mermaid
+flowchart TB
+    Client((Users))
 
-*(Hoặc bạn có thể tải file `architecture.drawio` về và mở bằng extension Draw.io trên VS Code).*
+    subgraph AWS["☁️ AWS Cloud (ap-southeast-1)"]
+        subgraph VPC["VPC (10.0.0.0/16)"]
+            
+            subgraph Public["🌐 Public Subnets"]
+                ALB{"Application Load Balancer"}
+            end
+            
+            subgraph Private["🔒 Private Subnets"]
+                subgraph ECS["📦 ECS Cluster (Fargate)"]
+                    Nginx["Nginx Gateway"]
+                    Auth["Auth Service (NestJS)"]
+                    Tickets["Ticket Service (NestJS)"]
+                end
+                
+                subgraph EFS["💾 EFS Shared Storage"]
+                    AuthDB[("Auth DB (Postgres)")]
+                    TicketDB[("Ticket DB (Postgres)")]
+                    Kafka{{"Kafka (Events)"}}
+                end
+            end
+        end
+    end
+
+    Client -->|HTTPS| ALB
+    ALB -->|HTTP 80| Nginx
+    Nginx -->|/api/auth| Auth
+    Nginx -->|/api/tickets| Tickets
+    
+    Auth -->|TCP 5432| AuthDB
+    Tickets -->|TCP 5432| TicketDB
+    
+    Auth -->|Publish Events| Kafka
+    Tickets -->|Consume Events| Kafka
+```
 
 ### Components
 1. **Application Load Balancer (ALB)**: Routes public HTTP/HTTPS traffic to the Nginx Gateway.
