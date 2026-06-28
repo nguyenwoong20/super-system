@@ -1,0 +1,125 @@
+{
+  "family": "postgres-db",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::<ACCOUNT_ID>:role/ecsTaskExecutionRole",
+
+  "volumes": [
+    {
+      "name": "postgres-auth-data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "<EFS_FILESYSTEM_ID>",
+        "rootDirectory": "/postgres/auth",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "accessPointId": "<EFS_ACCESS_POINT_AUTH_ID>",
+          "iam": "ENABLED"
+        }
+      }
+    },
+    {
+      "name": "postgres-tickets-data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "<EFS_FILESYSTEM_ID>",
+        "rootDirectory": "/postgres/tickets",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {
+          "accessPointId": "<EFS_ACCESS_POINT_TICKETS_ID>",
+          "iam": "ENABLED"
+        }
+      }
+    }
+  ],
+
+  "containerDefinitions": [
+    {
+      "name": "postgres-auth",
+      "image": "postgres:16-alpine",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 5432, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "POSTGRES_DB", "value": "auth_db" }
+      ],
+      "secrets": [
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:<ACCOUNT_ID>:secret:super-system/postgres/auth-user"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:<ACCOUNT_ID>:secret:super-system/postgres/auth-password"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "postgres-auth-data",
+          "containerPath": "/var/lib/postgresql/data",
+          "readOnly": false
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/super-system/postgres",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "auth-db"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "pg_isready -U postgres -d auth_db"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 5,
+        "startPeriod": 30
+      }
+    },
+    {
+      "name": "postgres-tickets",
+      "image": "postgres:16-alpine",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 5433, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "POSTGRES_DB", "value": "tickets_db" },
+        { "name": "PGPORT", "value": "5433" }
+      ],
+      "secrets": [
+        {
+          "name": "POSTGRES_USER",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:<ACCOUNT_ID>:secret:super-system/postgres/tickets-user"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:<ACCOUNT_ID>:secret:super-system/postgres/tickets-password"
+        }
+      ],
+      "mountPoints": [
+        {
+          "sourceVolume": "postgres-tickets-data",
+          "containerPath": "/var/lib/postgresql/data",
+          "readOnly": false
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/super-system/postgres",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "tickets-db"
+        }
+      },
+      "healthCheck": {
+        "command": ["CMD-SHELL", "pg_isready -U postgres -d tickets_db"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 5,
+        "startPeriod": 30
+      }
+    }
+  ]
+}

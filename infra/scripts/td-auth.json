@@ -1,0 +1,36 @@
+{
+  "family": "super-system-auth-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::080705554161:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::080705554161:role/super-system-task-role",
+  "containerDefinitions": [{
+    "name": "auth-service",
+    "image": "080705554161.dkr.ecr.ap-southeast-1.amazonaws.com/super-system/auth-service:latest",
+    "essential": true,
+    "portMappings": [{"containerPort": 3001, "protocol": "tcp"}],
+    "environment": [
+      {"name": "NODE_ENV", "value": "production"},
+      {"name": "PORT", "value": "3001"},
+      {"name": "KAFKA_BROKERS", "value": "kafka.super-system.local:9092"}
+    ],
+    "secrets": [
+      {"name": "DATABASE_URL", "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:080705554161:secret:super-system/auth/db-url-82UVLS"},
+      {"name": "JWT_SECRET", "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:080705554161:secret:super-system/jwt-secret-sVhlHt"}
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/super-system/auth-service",
+        "awslogs-region": "ap-southeast-1",
+        "awslogs-stream-prefix": "ecs"
+      }
+    },
+    "healthCheck": {
+      "command": ["CMD-SHELL", "curl -f http://localhost:3001/auth/health || exit 1"],
+      "interval": 30, "timeout": 5, "retries": 3, "startPeriod": 60
+    }
+  }]
+}

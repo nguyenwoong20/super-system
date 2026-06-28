@@ -1,0 +1,220 @@
+# ============================================================
+# docker-compose.yml — Local Development Stack
+# File: super-system/docker-compose.yml
+# ============================================================
+# Starts the FULL system locally:
+#   - Nginx Gateway (port 8080)
+#   - Auth Service (port 3001)
+#   - Ticket Service (port 3002)
+#   - PostgreSQL Auth DB (port 5432)
+#   - PostgreSQL Tickets DB (port 5433)
+#   - Zookeeper (port 2181)
+#   - Kafka (port 9092)
+#   - Kafka UI (port 9090)
+# ============================================================
+
+version: '3.9'
+
+networks:
+  super-system-net:
+    driver: bridge
+
+volumes:
+  postgres_auth_data:
+  postgres_tickets_data:
+  kafka_data:
+  zookeeper_data:
+
+services:
+
+  # ── Nginx Gateway ─────────────────────────────────────
+  nginx-gateway:
+    build:
+      context: ./src/gateway-proxy
+      dockerfile: Dockerfile
+    container_name: nginx-gateway
+    ports:
+      - "8080:80"
+    networks:
+      - super-system-net
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      ticket-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Auth Service ──────────────────────────────────────
+  auth-service:
+    build:
+      context: ./src/service-auth
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://auth_user:auth_pass@postgres-auth:5432/auth_db
+      JWT_SECRET: dev-jwt-secret-change-in-production
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - super-system-net
+    depends_on:
+      postgres-auth:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/auth/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ── Ticket Service ─────────────────────────────────────
+  ticket-service:
+    build:
+      context: ./src/service-tickets
+      dockerfile: Dockerfile
+    container_name: ticket-service
+    ports:
+      - "3002:3002"
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: postgresql://tickets_user:tickets_pass@postgres-tickets:5433/tickets_db
+      JWT_SECRET: dev-jwt-secret-change-in-production
+      KAFKA_BROKERS: kafka:9092
+    networks:
+      - super-system-net
+    depends_on:
+      postgres-tickets:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/tickets/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # ── PostgreSQL: Auth DB ────────────────────────────────
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: postgres-auth
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    networks:
+      - super-system-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── PostgreSQL: Tickets DB ─────────────────────────────
+  postgres-tickets:
+    image: postgres:16-alpine
+    container_name: postgres-tickets
+    ports:
+      - "5433:5433"
+    environment:
+      POSTGRES_DB: tickets_db
+      POSTGRES_USER: tickets_user
+      POSTGRES_PASSWORD: tickets_pass
+      PGPORT: "5433"
+    volumes:
+      - postgres_tickets_data:/var/lib/postgresql/data
+    networks:
+      - super-system-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tickets_user -d tickets_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Zookeeper (required by Kafka) ─────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - super-system-net
+    restart: unless-stopped
+
+  # ── Kafka Broker ──────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - super-system-net
+    depends_on:
+      - zookeeper
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Kafka UI (dev convenience) ─────────────────────────
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "9090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - super-system-net
+    depends_on:
+      - kafka
+    restart: unless-stopped
+
+  # ── Cloudflare Quick Tunnel (Local Public Exposure) ─────
+  # Uncomment this service to expose your local stack to the internet!
+  # It will print a free, random *.trycloudflare.com URL in the logs.
+  # cloudflare-tunnel:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: cloudflare-quick-tunnel
+  #   command: tunnel --no-autoupdate --url http://nginx-gateway:80
+  #   networks:
+  #     - super-system-net
+  #   depends_on:
+  #     - nginx-gateway
+  #   restart: unless-stopped
+

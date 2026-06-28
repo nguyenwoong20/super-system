@@ -1,0 +1,25 @@
+node_modules/
+dist/
+.env
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+*.pem
+*.key
+*.crt
+credentials.json
+
+# Deployment — never commit these!
+infra/scripts/outputs.env
+infra/scripts/*.env
+!infra/scripts/config.env
+
+
+# AI Config
+.gemini
+.agents
+CLAUDE.md
+.cursor
+.vscode
+

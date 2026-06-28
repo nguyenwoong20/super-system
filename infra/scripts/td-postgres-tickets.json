@@ -1,0 +1,44 @@
+{
+  "family": "super-system-postgres-tickets",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::080705554161:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::080705554161:role/super-system-task-role",
+  "volumes": [{
+    "name": "postgres-tickets-data",
+    "efsVolumeConfiguration": {
+      "fileSystemId": "fs-00c54f259f16e5108",
+      "transitEncryption": "ENABLED",
+      "authorizationConfig": { "accessPointId": "fsap-0048015cd5a5cb791", "iam": "ENABLED" }
+    }
+  }],
+  "containerDefinitions": [{
+    "name": "postgres-tickets",
+    "image": "080705554161.dkr.ecr.ap-southeast-1.amazonaws.com/super-system/postgres:16-alpine",
+    "user": "999",
+    "essential": true,
+    "portMappings": [{"containerPort": 5433, "protocol": "tcp"}],
+    "environment": [
+      {"name": "POSTGRES_DB", "value": "tickets_db"},
+      {"name": "POSTGRES_USER", "value": "tickets_user"},
+      {"name": "PGPORT", "value": "5433"},
+      {"name": "PGDATA", "value": "/var/lib/postgresql/data/pgdata"}
+    ],
+    "secrets": [{"name": "POSTGRES_PASSWORD", "valueFrom": "arn:aws:secretsmanager:ap-southeast-1:080705554161:secret:super-system/tickets/db-password-8kL9FD"}],
+    "mountPoints": [{"sourceVolume": "postgres-tickets-data", "containerPath": "/var/lib/postgresql/data"}],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "/ecs/super-system/postgres",
+        "awslogs-region": "ap-southeast-1",
+        "awslogs-stream-prefix": "tickets-db"
+      }
+    },
+    "healthCheck": {
+      "command": ["CMD-SHELL", "pg_isready -U tickets_user -d tickets_db"],
+      "interval": 30, "timeout": 5, "retries": 5, "startPeriod": 30
+    }
+  }]
+}

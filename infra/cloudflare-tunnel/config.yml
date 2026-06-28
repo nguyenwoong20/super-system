@@ -1,0 +1,47 @@
+# ============================================================
+# Cloudflare Tunnel Configuration
+# File: infra/cloudflare-tunnel/config.yml
+# ============================================================
+#
+# HOW TO USE:
+# 1. Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/
+# 2. Login: cloudflared tunnel login
+# 3. Create tunnel: cloudflared tunnel create super-system-tunnel
+# 4. Copy the tunnel UUID below
+# 5. Run: cloudflared tunnel --config infra/cloudflare-tunnel/config.yml run
+# ============================================================
+
+tunnel: <YOUR_TUNNEL_UUID_HERE>
+credentials-file: /etc/cloudflared/credentials.json
+
+# ── Ingress Rules ──────────────────────────────────────────
+# Traffic is routed from Cloudflare → your internal AWS ALB
+# The ALB DNS is only accessible within your VPC (private subnet)
+ingress:
+  # Route all traffic to the internal ALB
+  - hostname: api.super-system.com
+    service: http://internal-alb.ap-southeast-1.elb.amazonaws.com:80
+    originRequest:
+      # Timeout settings
+      connectTimeout: 30s
+      tlsTimeout: 30s
+      tcpKeepAlive: 30s
+      # Disable TLS verification for internal ALB (uses HTTP internally)
+      noTLSVerify: false
+      httpHostHeader: api.super-system.com
+
+  # Health check endpoint
+  - hostname: health.super-system.com
+    service: http://internal-alb.ap-southeast-1.elb.amazonaws.com:80/health
+
+  # Catch-all: reject anything else
+  - service: http_status:404
+
+# ── Metrics & Logging ──────────────────────────────────────
+metrics: 0.0.0.0:2000
+loglevel: info
+transport-loglevel: warn
+
+# ── Cloudflare Access (Zero-Trust) ─────────────────────────
+# Optional: restrict /admin routes to authenticated users only
+# Configure in Cloudflare dashboard → Access → Applications

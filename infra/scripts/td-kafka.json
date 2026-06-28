@@ -1,0 +1,61 @@
+{
+  "family": "super-system-kafka",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::080705554161:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::080705554161:role/super-system-task-role",
+  "volumes": [{
+    "name": "kafka-data",
+    "efsVolumeConfiguration": {
+      "fileSystemId": "fs-00c54f259f16e5108",
+      "transitEncryption": "ENABLED",
+      "authorizationConfig": { "accessPointId": "fsap-03d20777cf419f5f7", "iam": "ENABLED" }
+    }
+  }],
+  "containerDefinitions": [
+    {
+      "name": "zookeeper",
+      "image": "confluentinc/cp-zookeeper:7.5.0",
+      "essential": true,
+      "portMappings": [{"containerPort": 2181}],
+      "environment": [
+        {"name": "ZOOKEEPER_CLIENT_PORT", "value": "2181"},
+        {"name": "ZOOKEEPER_TICK_TIME", "value": "2000"}
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/super-system/kafka",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "zookeeper"
+        }
+      }
+    },
+    {
+      "name": "kafka",
+      "image": "confluentinc/cp-kafka:7.5.0",
+      "essential": true,
+      "dependsOn": [{"containerName": "zookeeper", "condition": "START"}],
+      "portMappings": [{"containerPort": 9092}],
+      "environment": [
+        {"name": "KAFKA_BROKER_ID", "value": "1"},
+        {"name": "KAFKA_ZOOKEEPER_CONNECT", "value": "localhost:2181"},
+        {"name": "KAFKA_ADVERTISED_LISTENERS", "value": "PLAINTEXT://kafka.super-system.local:9092"},
+        {"name": "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR", "value": "1"},
+        {"name": "KAFKA_AUTO_CREATE_TOPICS_ENABLE", "value": "true"},
+        {"name": "KAFKA_LOG_RETENTION_HOURS", "value": "168"}
+      ],
+      "mountPoints": [{"sourceVolume": "kafka-data", "containerPath": "/var/lib/kafka/data"}],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/super-system/kafka",
+          "awslogs-region": "ap-southeast-1",
+          "awslogs-stream-prefix": "kafka"
+        }
+      }
+    }
+  ]
+}
